@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: obxai
+      POSTGRES_PASSWORD: obxai
+      POSTGRES_DB: obxai
+    ports:
+      - "5432:5432"
+    volumes:
+      - obxai_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U obxai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://obxai:obxai@db:5432/obxai
+      ALLOW_ORIGINS: http://localhost:5173,http://localhost:3000
+      TIMEZONE: Europe/Oslo
+    ports:
+      - "8000:8000"
+
+volumes:
+  obxai_pgdata:
