@@ -44,17 +44,45 @@ class DataFetchError(RuntimeError):
 def _yfinance_fetch(ticker: str, days: int) -> List[Dict]:
     import yfinance as yf  # imported lazily
 
-    period = f"{max(days, 30)}d"
-    df = yf.download(
-        ticker,
-        period=period,
-        interval="1d",
-        progress=False,
-        auto_adjust=False,
-        threads=False,
-    )
+    # yfinance only accepts a fixed set of period strings (1d, 5d, 1mo, 3mo,
+    # 6mo, 1y, …) — passing "180d" silently returns an empty frame. Use an
+    # explicit start/end window so any lookback works. Add a small buffer for
+    # weekends and holidays so we still get `days` trading bars back.
+    end = date.today() + timedelta(days=1)  # end is exclusive
+    start = end - timedelta(days=max(days, 30) + 14)
+
+    df = None
+    try:
+        df = yf.download(
+            ticker,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            interval="1d",
+            progress=False,
+            auto_adjust=False,
+            threads=False,
+        )
+    except Exception as e:
+        logger.debug("yf.download raised for %s: %s", ticker, e)
+
     if df is None or df.empty:
-        raise RuntimeError("yfinance returned no rows")
+        # Fall back to Ticker.history(), which uses a different Yahoo endpoint
+        # and sometimes succeeds when download() fails.
+        try:
+            df = yf.Ticker(ticker).history(
+                start=start.isoformat(),
+                end=end.isoformat(),
+                interval="1d",
+                auto_adjust=False,
+            )
+        except Exception as e:
+            raise RuntimeError(f"yfinance request failed: {e}") from e
+
+    if df is None or df.empty:
+        raise RuntimeError(
+            "yfinance returned no rows (Yahoo blocked the request, ticker "
+            "unknown, or no trading in the window)"
+        )
 
     df = df.reset_index()
     if hasattr(df.columns, "nlevels") and df.columns.nlevels > 1:
