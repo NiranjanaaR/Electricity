@@ -15,6 +15,8 @@ class Stock(Base):
     name = Column(String(128), nullable=False)
     sector = Column(String(64), nullable=True)
     currency = Column(String(8), default="NOK")
+    last_fetch_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
 
     prices = relationship("PriceBar", back_populates="stock", cascade="all, delete-orphan")
     suggestions = relationship("Suggestion", back_populates="stock", cascade="all, delete-orphan")

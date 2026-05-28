@@ -1,4 +1,4 @@
-import type { Suggestion, StockDetail } from "./types";
+import type { Suggestion, StockDetail, Stock, FetchError } from "./types";
 
 const BASE = "";
 
@@ -25,9 +25,13 @@ export const api = {
   },
   stockDetail: (ticker: string, days = 120) =>
     jsonFetch<StockDetail>(`/api/stocks/${encodeURIComponent(ticker)}?days=${days}`),
+  stocks: (onlyErrors = false) =>
+    jsonFetch<Stock[]>(`/api/stocks${onlyErrors ? "?only_errors=true" : ""}`),
   runAnalysis: () =>
-    jsonFetch<{ analyzed: number; suggestions: number; analysis_date: string }>(
-      "/api/analysis/run",
-      { method: "POST" }
-    ),
+    jsonFetch<{
+      analyzed: number;
+      suggestions: number;
+      analysis_date: string;
+      errors: FetchError[];
+    }>("/api/analysis/run", { method: "POST" }),
 };

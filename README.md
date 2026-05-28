@@ -1,97 +1,108 @@
 # OsloBørs AI Assistant
 
-A daily technical-analysis dashboard for Oslo Børs stocks. The backend pulls
-historical OHLCV data, computes a small library of indicators (RSI, SMA-20/50,
-volume spikes, momentum, volatility) and produces a `BUY` / `WATCH` / `AVOID`
-suggestion with a confidence score, risk level, and human-readable explanation.
+A daily technical-analysis dashboard for the Oslo Børs equity market. The
+backend pulls **real** historical OHLCV bars from public market-data
+providers, computes a small library of indicators (RSI, SMA-20/50, volume
+spikes, momentum, volatility) and produces a `BUY` / `WATCH` / `AVOID`
+suggestion with a confidence score, risk level, and human-readable
+explanation.
 
-> ⚠️ **Educational use only.** Suggestions are derived from technical signals
-> and are not investment advice. The app does **not** execute trades.
+> ⚠️ Informational tool. Signals are derived from technical indicators and
+> are not investment advice. The app does **not** execute trades.
 
 ## Stack
 
-- **Backend** — FastAPI, SQLAlchemy, PostgreSQL, APScheduler, NumPy/pandas,
-  yfinance for data (with a deterministic synthetic-data fallback so the app
-  works in sandboxed environments without internet).
+- **Backend** — FastAPI, SQLAlchemy, PostgreSQL, APScheduler, NumPy/pandas.
 - **Frontend** — React + TypeScript + Vite, Tailwind CSS, Recharts.
 
-## Layout
+## Data sources
 
-```
-backend/   FastAPI service + analyzer + scheduler
-frontend/  React + Tailwind dashboard
-docker-compose.yml  Postgres + backend
-```
+Real market data only — no synthetic fallback. Providers are tried in this
+order; the first one that returns valid bars wins. A failure on every
+provider is recorded against the stock and surfaced in the UI / API.
+
+| Order | Provider | Auth | Coverage |
+| --- | --- | --- | --- |
+| 1 | **Yahoo Finance** (`yfinance`) | none | Full Oslo Børs via `.OL` suffix |
+| 2 | **AlphaVantage** `TIME_SERIES_DAILY` | `ALPHAVANTAGE_API_KEY` | International incl. Oslo (rate-limited free tier) |
+| 3 | **Finnhub** `/stock/candle` | `FINNHUB_API_KEY` | International incl. Oslo (paid tier for OB candles) |
+
+## Stock universe
+
+~80 liquid Oslo Børs tickers across Energy, Financials, Communication
+Services, Consumer Staples (incl. seafood), Materials, Industrials,
+Shipping, Real Estate, Utilities, IT and Healthcare. Edit
+`backend/app/seed_data.py` to add or remove tickers; the analyzer syncs the
+DB on every run.
 
 ## Running locally
 
-### Option A — Docker (Postgres + backend)
+### Docker (Postgres + backend)
 
 ```bash
 docker compose up --build
 ```
 
-Then in another terminal:
-
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Open <http://localhost:5173>. The Vite dev server proxies `/api/*` to the
-backend on port 8000.
+Open <http://localhost:5173>. Vite proxies `/api/*` to the backend on port 8000.
 
-### Option B — Bare metal (uses SQLite fallback if Postgres isn't running)
+The backend triggers an initial market-data fetch in the background on
+first launch; with ~80 tickers via Yahoo this typically takes 1–2 minutes.
+A scheduled run also fires every day at the configured time
+(`SCHEDULE_HOUR` / `SCHEDULE_MINUTE`, default 07:00 Europe/Oslo). You can
+trigger one manually at any time:
+
+```bash
+curl -X POST http://localhost:8000/api/analysis/run
+```
+
+### Bare metal
 
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-export DATABASE_URL=sqlite:///./obxai.db   # or your Postgres URL
+cp .env.example .env   # edit DATABASE_URL etc.
 uvicorn app.main:app --reload
 ```
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+If `yfinance` is blocked in your environment, configure one of the API-key
+providers in `.env` (`ALPHAVANTAGE_API_KEY` or `FINNHUB_API_KEY`).
 
 ## How analysis works
 
-For each ticker in `backend/app/seed_data.py` the analyzer:
+For each ticker the analyzer:
 
-1. Fetches up to `ANALYSIS_LOOKBACK_DAYS` (default 180) of daily OHLCV bars.
+1. Fetches up to `ANALYSIS_LOOKBACK_DAYS` (default 180) of daily OHLCV bars
+   from the first provider that responds.
 2. Computes:
-   - **RSI(14)** — oversold (<30) is treated as bullish, overbought (>70) bearish.
+   - **RSI(14)** — oversold (<30) bullish, overbought (>70) bearish.
    - **SMA-20 / SMA-50** — price above both = uptrend; below both = downtrend.
-   - **Volume spike** — today's volume / 20-day average, weighted by the day's
-     direction.
-   - **Momentum (10d)** and **20-day volatility** (the latter feeds the risk
-     level).
+   - **Volume spike** — today's volume / 20-day average, weighted by direction.
+   - **Momentum (10d)** and **20-day volatility** (volatility feeds risk level).
 3. Combines the signals into a confidence score (0..1) and an action
    (`BUY ≥ 0.65`, `WATCH ≥ 0.45`, otherwise `AVOID`).
-4. Writes a `Suggestion` row with the indicator values and a one-line
+4. Writes a `Suggestion` row with indicator values and a one-line
    explanation.
 
-The scheduler re-runs the analysis daily at the time configured by
-`SCHEDULE_HOUR` / `SCHEDULE_MINUTE` (default 07:00 Europe/Oslo). You can also
-trigger a run manually:
-
-```bash
-curl -X POST http://localhost:8000/api/analysis/run
-```
+If data fetching fails, the stock's `last_error` is updated, no suggestion
+is generated for that ticker, and the run result includes a `errors[]`
+list. The UI shows an "N ticker(s) with fetch errors" panel.
 
 ## API
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/api/health` | Liveness probe. |
-| `GET` | `/api/stocks` | List the tracked ticker universe. |
+| `GET` | `/api/stocks?only_errors=true` | Universe, with last fetch state. |
 | `GET` | `/api/stocks/{ticker}?days=120` | Price history + latest suggestion. |
 | `GET` | `/api/suggestions?action=BUY&risk=Low&limit=20` | Latest suggestion per stock, sorted by confidence. |
-| `POST` | `/api/analysis/run` | Trigger an analysis run synchronously. |
+| `POST` | `/api/analysis/run` | Trigger an analysis run synchronously. Returns `errors[]`. |
 
 ## Configuration
 
@@ -104,11 +115,6 @@ SCHEDULE_HOUR=7
 SCHEDULE_MINUTE=0
 TIMEZONE=Europe/Oslo
 ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000
+ALPHAVANTAGE_API_KEY=
+FINNHUB_API_KEY=
 ```
-
-## Data sources & fallback
-
-Live prices are fetched through `yfinance` using the `.OL` suffix used by
-Yahoo Finance for Oslo Børs listings. When the network is unreachable, the
-backend falls back to a deterministic synthetic OHLCV series seeded from the
-ticker, so the app remains demoable end-to-end.

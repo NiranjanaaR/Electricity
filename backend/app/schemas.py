@@ -13,6 +13,8 @@ class StockBase(BaseModel):
 class StockOut(StockBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    last_fetch_at: Optional[datetime] = None
+    last_error: Optional[str] = None
 
 
 class PriceBarOut(BaseModel):
@@ -47,7 +49,13 @@ class StockDetail(BaseModel):
     suggestion: Optional[SuggestionOut] = None
 
 
+class FetchError(BaseModel):
+    ticker: str
+    error: str
+
+
 class AnalysisRunResult(BaseModel):
     analyzed: int
     suggestions: int
     analysis_date: date
+    errors: List[FetchError] = []

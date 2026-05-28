@@ -1,10 +1,15 @@
 """Daily analyzer: scores each stock and produces a Suggestion.
 
-This is an educational signal-mix — not investment advice.
+Uses **real market data only**. If data cannot be fetched for a ticker,
+the failure is recorded on the Stock row and returned in the run
+result; no suggestion is produced for that ticker.
+
+This is a technical-signal mix — not investment advice. The app does
+not place trades.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import List
 import logging
 
@@ -12,29 +17,35 @@ from sqlalchemy.orm import Session
 
 from . import indicators
 from .models import Stock, PriceBar, Suggestion
-from .data_provider import fetch_prices
-from .seed_data import OBX_UNIVERSE
+from .data_provider import fetch_prices, DataFetchError
+from .seed_data import universe
 
 logger = logging.getLogger(__name__)
 
 
 def ensure_universe(db: Session) -> List[Stock]:
-    """Make sure the stock universe is present in the DB."""
+    """Make sure the stock universe is present in the DB and in sync."""
     existing = {s.ticker: s for s in db.query(Stock).all()}
-    created: List[Stock] = []
-    for entry in OBX_UNIVERSE:
+    created = 0
+    for entry in universe():
         if entry["ticker"] not in existing:
-            stock = Stock(**entry)
-            db.add(stock)
-            created.append(stock)
+            db.add(Stock(**entry))
+            created += 1
+        else:
+            stock = existing[entry["ticker"]]
+            stock.name = entry["name"]
+            stock.sector = entry.get("sector")
     if created:
-        db.commit()
-        for s in created:
-            db.refresh(s)
-    return db.query(Stock).all()
+        logger.info("Added %d new stocks to universe", created)
+    db.commit()
+    return db.query(Stock).order_by(Stock.ticker.asc()).all()
 
 
 def refresh_prices(db: Session, stock: Stock, lookback_days: int) -> List[PriceBar]:
+    """Fetch fresh OHLCV bars and merge them into the DB.
+
+    Raises ``DataFetchError`` if the data providers all fail.
+    """
     bars = fetch_prices(stock.ticker, days=lookback_days)
     existing_dates = {p.date for p in stock.prices}
     added = 0
@@ -43,8 +54,9 @@ def refresh_prices(db: Session, stock: Stock, lookback_days: int) -> List[PriceB
             continue
         db.add(PriceBar(stock_id=stock.id, **b))
         added += 1
-    if added:
-        db.commit()
+    stock.last_fetch_at = datetime.utcnow()
+    stock.last_error = None
+    db.commit()
     return (
         db.query(PriceBar)
         .filter(PriceBar.stock_id == stock.id)
@@ -60,7 +72,6 @@ def score(rsi: float | None, vol_spike: float | None,
     reasons: list[str] = []
     points = 0.0
 
-    # RSI: oversold = bullish bias, overbought = bearish bias
     if rsi is not None:
         if rsi < 30:
             points += 0.35
@@ -77,7 +88,6 @@ def score(rsi: float | None, vol_spike: float | None,
         else:
             reasons.append(f"RSI {rsi:.1f} — neutral")
 
-    # Moving-average cross / trend
     if sma20 is not None and sma50 is not None and last_close is not None:
         if last_close > sma20 > sma50:
             points += 0.25
@@ -91,7 +101,6 @@ def score(rsi: float | None, vol_spike: float | None,
         else:
             reasons.append("Trend mixed across SMAs")
 
-    # Volume spike — confirms whatever direction price is moving
     if vol_spike is not None:
         if vol_spike > 1.8:
             if mom_pct is not None and mom_pct > 0:
@@ -106,7 +115,6 @@ def score(rsi: float | None, vol_spike: float | None,
         elif vol_spike > 1.3:
             reasons.append(f"Volume {vol_spike:.1f}× average — slight pickup")
 
-    # Decide action
     confidence = max(0.0, min(1.0, 0.5 + points))
     if confidence >= 0.65:
         action = "BUY"
@@ -129,6 +137,7 @@ def risk_from_volatility(vol_pct: float | None) -> str:
 
 def analyze_stock(db: Session, stock: Stock, lookback_days: int,
                   analysis_date: date) -> Suggestion | None:
+    """Analyze a single stock. Bubbles fetch errors up to the caller."""
     prices = refresh_prices(db, stock, lookback_days)
     if len(prices) < 30:
         logger.info("Not enough history for %s (%d bars)", stock.ticker, len(prices))
@@ -148,7 +157,6 @@ def analyze_stock(db: Session, stock: Stock, lookback_days: int,
     action, confidence, explanation = score(rsi_v, vol_spike, sma20, sma50, last_close, mom)
     risk = risk_from_volatility(vol_pct)
 
-    # Replace previous suggestion for the same day
     db.query(Suggestion).filter(
         Suggestion.stock_id == stock.id,
         Suggestion.analysis_date == analysis_date,
@@ -175,14 +183,37 @@ def analyze_stock(db: Session, stock: Stock, lookback_days: int,
 
 def run_daily_analysis(db: Session, lookback_days: int = 180,
                        analysis_date: date | None = None) -> dict:
+    """Analyze every stock in the universe.
+
+    Returns a dict with ``analyzed`` (attempted), ``suggestions`` (produced),
+    ``analysis_date`` and ``errors`` (per-ticker fetch failures).
+    """
     analysis_date = analysis_date or date.today()
     stocks = ensure_universe(db)
     suggestions = 0
+    errors: list[dict] = []
+
     for stock in stocks:
         try:
             res = analyze_stock(db, stock, lookback_days, analysis_date)
             if res is not None:
                 suggestions += 1
+        except DataFetchError as e:
+            msg = "; ".join(e.attempts)
+            stock.last_error = msg
+            stock.last_fetch_at = datetime.utcnow()
+            db.commit()
+            errors.append({"ticker": stock.ticker, "error": msg})
+            logger.warning("Fetch failed for %s: %s", stock.ticker, msg)
         except Exception as e:
-            logger.exception("Analysis failed for %s: %s", stock.ticker, e)
-    return {"analyzed": len(stocks), "suggestions": suggestions, "analysis_date": analysis_date}
+            stock.last_error = f"analysis error: {e}"
+            db.commit()
+            errors.append({"ticker": stock.ticker, "error": str(e)})
+            logger.exception("Analysis failed for %s", stock.ticker)
+
+    return {
+        "analyzed": len(stocks),
+        "suggestions": suggestions,
+        "analysis_date": analysis_date,
+        "errors": errors,
+    }

@@ -18,8 +18,8 @@ export default function Header({ onRunAnalysis, running, analysisDate }: Props) 
             </h1>
           </div>
           <p className="text-sm text-white/70 mt-1">
-            Daily technical analysis of Oslo Børs stocks &middot; educational only,
-            no automatic trading
+            Daily technical analysis on real Oslo Børs market data &middot;
+            informational only, no automatic trading
           </p>
         </div>
         <div className="flex items-center gap-3">

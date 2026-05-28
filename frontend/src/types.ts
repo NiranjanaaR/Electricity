@@ -4,6 +4,13 @@ export interface Stock {
   name: string;
   sector?: string | null;
   currency: string;
+  last_fetch_at?: string | null;
+  last_error?: string | null;
+}
+
+export interface FetchError {
+  ticker: string;
+  error: string;
 }
 
 export interface PriceBar {

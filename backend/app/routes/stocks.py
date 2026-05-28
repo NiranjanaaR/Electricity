@@ -2,6 +2,7 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -12,8 +13,14 @@ router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 
 
 @router.get("", response_model=List[StockOut])
-def list_stocks(db: Session = Depends(get_db)) -> List[Stock]:
-    return db.query(Stock).order_by(Stock.ticker.asc()).all()
+def list_stocks(
+    only_errors: bool = Query(False, description="Only return stocks whose last fetch failed"),
+    db: Session = Depends(get_db),
+) -> List[Stock]:
+    q = db.query(Stock)
+    if only_errors:
+        q = q.filter(Stock.last_error.isnot(None))
+    return q.order_by(Stock.ticker.asc()).all()
 
 
 @router.get("/{ticker}", response_model=StockDetail)

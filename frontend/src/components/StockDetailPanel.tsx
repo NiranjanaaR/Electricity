@@ -70,9 +70,20 @@ export default function StockDetailPanel({ ticker }: Props) {
 
       <StockChart prices={prices} />
 
+      {stock.last_fetch_at && (
+        <p className="text-[11px] text-slate-400 mt-3">
+          Last data fetch: {new Date(stock.last_fetch_at).toLocaleString()}
+        </p>
+      )}
+      {stock.last_error && (
+        <p className="text-[11px] text-rose-600 mt-1">
+          Last fetch error: {stock.last_error}
+        </p>
+      )}
+
       <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
-        Educational analysis only. Signals are derived from technical indicators (RSI,
-        SMA, volume) and do not constitute investment advice. No trades are executed.
+        Signals derived from technical indicators on real daily OHLCV — not
+        investment advice. No trades are executed.
       </p>
     </div>
   );
