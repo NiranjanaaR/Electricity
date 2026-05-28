@@ -25,4 +25,12 @@ export const APPLIANCES: Appliance[] = [
     runHours: 2,
     description: "Heat-pump dryer (~2 h)",
   },
+  {
+    id: "ev",
+    name: "EV Charging",
+    icon: "🚗",
+    kWh: 7.4,
+    runHours: 6,
+    description: "Home AC charge, ~7 kW (~6 h)",
+  },
 ];
