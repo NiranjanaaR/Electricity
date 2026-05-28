@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-nordic-bg text-nordic-ink font-sans antialiased;
+    background-image:
+      radial-gradient(1200px 600px at 110% -10%, rgba(166, 207, 226, 0.35), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(123, 183, 164, 0.18), transparent 60%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-nordic-surface border border-nordic-line rounded-xl2 shadow-soft;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+}
