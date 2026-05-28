@@ -43,12 +43,12 @@ export function findCheapestWindow(points: HourPoint[], runHours: number): RunWi
 }
 
 export function nokPerKWh(value: number): string {
-  return `${(value * 100).toFixed(1)} øre`;
+  const decimals = value < 0.1 ? 3 : 2;
+  return `${value.toFixed(decimals)} kr`;
 }
 
 export function nokTotal(value: number): string {
-  if (value >= 1) return `${value.toFixed(2)} kr`;
-  return `${(value * 100).toFixed(0)} øre`;
+  return `${value.toFixed(2)} kr`;
 }
 
 export function hourRange(startHour: number, endHour: number): string {

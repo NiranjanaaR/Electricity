@@ -60,13 +60,13 @@ export function PriceChart({ points, cheapestIndex, expensiveIndex, highlightedW
           />
           <YAxis
             tick={{ fill: "#5B6E78", fontSize: 11 }}
-            tickFormatter={(v: number) => `${(v * 100).toFixed(0)}`}
+            tickFormatter={(v: number) => v.toFixed(2)}
             tickLine={false}
             axisLine={{ stroke: "#E3E8EC" }}
             domain={[0, yMax]}
-            width={48}
+            width={56}
             label={{
-              value: "øre/kWh",
+              value: "kr/kWh",
               angle: -90,
               position: "insideLeft",
               offset: 18,

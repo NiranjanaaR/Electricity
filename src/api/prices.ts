@@ -17,7 +17,9 @@ export async function fetchPrices(date: Date, area: PriceArea): Promise<PriceEnt
   const url = buildPricesUrl(date, area);
   const res = await fetch(url);
   if (res.status === 404) {
-    throw new Error("Prices for this day are not published yet.");
+    throw new Error(
+      "Prices for this day aren't published yet. Tomorrow's prices are usually released around 13:00 CET."
+    );
   }
   if (!res.ok) {
     throw new Error(`Failed to load prices (${res.status})`);
