@@ -1,0 +1,18 @@
+Create a modern React + TypeScript web app for Norway electricity planning using the Hvakosterstrommen.no API.
+
+Features:
+- Fetch live hourly electricity prices for NO2 region
+- Show prices in a clean chart
+- Highlight cheapest and most expensive hours
+- Let users choose:
+  - Dishwasher
+  - Washing Machine
+  - Dryer
+- Suggest the cheapest time to run each appliance
+- Show estimated cost for running the appliance
+- Use a modern Nordic-style UI
+- Mobile responsive
+- Use Tailwind CSS
+- Use Recharts for visualization
+- No backend
+- Ready for Netlify deployment
