@@ -16,6 +16,7 @@ import logging
 from sqlalchemy.orm import Session
 
 import json
+import time
 
 from . import indicators
 from .models import Stock, PriceBar, Suggestion
@@ -259,7 +260,11 @@ def run_daily_analysis(db: Session, lookback_days: int = 180,
     suggestions = 0
     errors: list[dict] = []
 
-    for stock in stocks:
+    for i, stock in enumerate(stocks):
+        # Be polite to Yahoo — without a small delay we trigger HTTP 429
+        # on the enrichment endpoints after the first ~20 tickers.
+        if i > 0:
+            time.sleep(0.4)
         try:
             res = analyze_stock(db, stock, lookback_days, analysis_date)
             if res is not None:

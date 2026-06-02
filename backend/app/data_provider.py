@@ -307,23 +307,110 @@ def _yahoo_news(ticker: str, limit: int = 5) -> List[Dict]:
     return out
 
 
+def _yfinance_enrichment(ticker: str) -> Dict:
+    """Fallback enrichment via yfinance — uses Yahoo's crumb-authed
+    endpoints which often succeed when the bare HTTPS calls 429.
+    """
+    import yfinance as yf  # imported lazily
+
+    t = yf.Ticker(ticker)
+    out: Dict = {}
+
+    info: Dict = {}
+    try:
+        info = t.info or {}
+    except Exception as e:
+        logger.debug("yfinance .info failed for %s: %s", ticker, e)
+
+    out["bid"] = info.get("bid")
+    out["ask"] = info.get("ask")
+    out["avg_volume_10d"] = info.get("averageDailyVolume10Day") or info.get("averageVolume10days")
+    out["avg_volume_3m"] = info.get("averageVolume")
+
+    # Earnings: .calendar is a DataFrame or dict depending on yfinance version
+    try:
+        cal = t.calendar
+        next_earnings = None
+        if hasattr(cal, "empty") and not cal.empty:
+            # DataFrame form
+            try:
+                ts = cal.loc["Earnings Date"].iloc[0]
+                next_earnings = ts.date() if hasattr(ts, "date") else None
+            except Exception:
+                pass
+        elif isinstance(cal, dict):
+            ed = cal.get("Earnings Date") or cal.get("earningsDate")
+            if isinstance(ed, list) and ed:
+                v = ed[0]
+                next_earnings = v if isinstance(v, date) else getattr(v, "date", lambda: None)()
+        out["next_earnings"] = next_earnings
+    except Exception as e:
+        logger.debug("yfinance .calendar failed for %s: %s", ticker, e)
+        out["next_earnings"] = None
+
+    return out
+
+
+def _yfinance_news(ticker: str, limit: int = 5) -> List[Dict]:
+    import yfinance as yf
+
+    raw = []
+    try:
+        raw = yf.Ticker(ticker).news or []
+    except Exception as e:
+        logger.debug("yfinance .news failed for %s: %s", ticker, e)
+
+    out: List[Dict] = []
+    for n in raw[:limit]:
+        # yfinance 0.2.x: flat dict; newer versions: {"content": {...}}
+        item = n.get("content") if isinstance(n.get("content"), dict) else n
+        title = item.get("title")
+        publisher = item.get("publisher") or (item.get("provider") or {}).get("displayName")
+        link = item.get("link") or (item.get("canonicalUrl") or {}).get("url")
+        ts = item.get("providerPublishTime") or item.get("pubDate")
+        published = None
+        if isinstance(ts, (int, float)):
+            published = datetime.utcfromtimestamp(ts).isoformat()
+        elif isinstance(ts, str):
+            published = ts
+        out.append({"title": title, "publisher": publisher,
+                    "link": link, "published": published})
+    return out
+
+
 def fetch_enrichment(ticker: str) -> Dict:
     """Pull bid/ask, average volume, next earnings date, and recent news.
 
-    Best-effort: any failure is logged and an empty value substituted, so
-    a degraded enrichment never blocks the price analysis.
+    Tries Yahoo's direct endpoints first; falls back to yfinance when
+    the direct calls get rate-limited. Best-effort throughout — any
+    failure substitutes an empty value so a degraded enrichment never
+    blocks the price analysis.
     """
     meta: Dict = {}
     try:
         meta = _yahoo_quote_summary(ticker)
     except Exception as e:
-        logger.info("Enrichment metadata unavailable for %s: %s", ticker, e)
+        logger.info("Direct quote-summary failed for %s: %s", ticker, e)
 
+    # If the direct call missed anything, try yfinance for the gaps.
+    if not meta or not any(v is not None for v in meta.values()):
+        try:
+            meta = _yfinance_enrichment(ticker)
+        except Exception as e:
+            logger.info("yfinance enrichment fallback failed for %s: %s", ticker, e)
+
+    news: List[Dict] = []
     try:
         news = _yahoo_news(ticker)
     except Exception as e:
-        logger.info("Enrichment news unavailable for %s: %s", ticker, e)
-        news = []
+        logger.info("Direct news fetch failed for %s: %s", ticker, e)
+
+    if not news:
+        try:
+            news = _yfinance_news(ticker)
+        except Exception as e:
+            logger.info("yfinance news fallback failed for %s: %s", ticker, e)
+
     meta["news"] = news
     return meta
 
