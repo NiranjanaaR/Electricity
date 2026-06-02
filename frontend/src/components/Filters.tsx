@@ -1,3 +1,5 @@
+import Segmented from "./Segmented";
+
 interface Props {
   action: string;
   setAction: (v: string) => void;
@@ -5,32 +7,25 @@ interface Props {
   setRisk: (v: string) => void;
 }
 
-const btn = (active: boolean) =>
-  `text-sm px-3 py-1.5 rounded-md border transition ${
-    active
-      ? "bg-nordic-700 border-nordic-700 text-white"
-      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-  }`;
+const ACTION_OPTIONS = [
+  { label: "All", value: "" },
+  { label: "Buy", value: "BUY" },
+  { label: "Watch", value: "WATCH" },
+  { label: "Avoid", value: "AVOID" },
+];
+
+const RISK_OPTIONS = [
+  { label: "All", value: "" },
+  { label: "Low", value: "Low" },
+  { label: "Medium", value: "Medium" },
+  { label: "High", value: "High" },
+];
 
 export default function Filters({ action, setAction, risk, setRisk }: Props) {
   return (
-    <div className="flex flex-wrap items-center gap-4 mb-5">
-      <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-slate-500">Action</span>
-        {["", "BUY", "WATCH", "AVOID"].map((a) => (
-          <button key={a || "all"} className={btn(action === a)} onClick={() => setAction(a)}>
-            {a || "All"}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-slate-500">Risk</span>
-        {["", "Low", "Medium", "High"].map((r) => (
-          <button key={r || "all"} className={btn(risk === r)} onClick={() => setRisk(r)}>
-            {r || "All"}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+      <Segmented label="Action" options={ACTION_OPTIONS} value={action} onChange={setAction} />
+      <Segmented label="Risk" options={RISK_OPTIONS} value={risk} onChange={setRisk} />
     </div>
   );
 }

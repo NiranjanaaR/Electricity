@@ -21,7 +21,7 @@ export default function AppShell() {
     try {
       const r = await api.runAnalysis();
       setAnalysisDate(r.analysis_date);
-      navigate(0); // refresh current page data
+      navigate(0);
     } catch (e) {
       console.error(e);
     } finally {
@@ -31,32 +31,32 @@ export default function AppShell() {
 
   return (
     <div className="min-h-full bg-slate-50">
-      <header className="bg-gradient-to-r from-nordic-900 to-nordic-700 text-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <header className="bg-gradient-to-r from-nordic-900 via-nordic-700 to-nordic-700 text-white shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center font-bold tracking-tight">
               OB
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight">
+              <h1 className="text-lg sm:text-xl font-semibold tracking-tight leading-tight">
                 OsloBørs AI Assistant
               </h1>
-              <p className="text-xs text-white/70">
+              <p className="text-[11px] text-white/70 mt-0.5">
                 Real OB market data · informational only · no automatic trading
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {analysisDate && (
-              <span className="text-xs text-white/70 hidden sm:inline">
-                Last: {analysisDate}
+              <span className="text-[11px] text-white/70 hidden sm:inline">
+                Last analysis: <span className="text-white">{analysisDate}</span>
               </span>
             )}
             <AlertsBell />
             <button
               onClick={runAnalysis}
               disabled={running}
-              className="px-3 py-1.5 rounded-md bg-white text-nordic-900 text-sm font-medium hover:bg-nordic-50 disabled:opacity-50 transition"
+              className="px-3.5 py-2 rounded-md bg-white text-nordic-900 text-sm font-semibold hover:bg-nordic-50 disabled:opacity-50 transition shadow-sm"
             >
               {running ? "Running…" : "Run analysis"}
             </button>
@@ -70,18 +70,25 @@ export default function AppShell() {
                   to={n.to}
                   end={n.end}
                   className={({ isActive }) =>
-                    `inline-block px-3 py-2 border-b-2 transition ${
+                    `relative inline-block px-3.5 py-2.5 font-medium transition ${
                       isActive
-                        ? "border-white text-white"
-                        : "border-transparent text-white/70 hover:text-white"
+                        ? "text-white"
+                        : "text-white/60 hover:text-white"
                     }`
                   }
                 >
-                  {n.label}
-                  {n.to === "/watchlist" && tickers.length > 0 && (
-                    <span className="ml-1.5 text-[10px] bg-white/20 rounded-full px-1.5 py-0.5">
-                      {tickers.length}
-                    </span>
+                  {({ isActive }) => (
+                    <>
+                      <span>{n.label}</span>
+                      {n.to === "/watchlist" && tickers.length > 0 && (
+                        <span className="ml-1.5 text-[10px] bg-white/20 rounded-full px-1.5 py-0.5 align-middle">
+                          {tickers.length}
+                        </span>
+                      )}
+                      {isActive && (
+                        <span className="absolute left-3 right-3 -bottom-px h-0.5 bg-white rounded-t" />
+                      )}
+                    </>
                   )}
                 </NavLink>
               </li>

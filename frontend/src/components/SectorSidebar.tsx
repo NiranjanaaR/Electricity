@@ -85,12 +85,13 @@ export default function SectorSidebar({
 
       {/* Desktop sidebar */}
       <aside className="hidden lg:block w-56 shrink-0">
-        <div className="bg-white border border-slate-200 rounded-xl p-2 sticky top-4">
-          <h3 className="text-[11px] uppercase tracking-wide text-slate-500 px-2 py-1.5">
+        <div className="bg-white border border-slate-200 rounded-xl p-2.5 sticky top-4 shadow-sm">
+          <h3 className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold px-2 py-1.5 mb-1">
             Sectors
           </h3>
           <div className="space-y-0.5">
             <Row label="All sectors" count={totalCount} value="" />
+            <div className="my-1.5 border-t border-slate-100" />
             {sectors.map(([s, c]) => (
               <Row key={s} label={s} count={c} value={s} />
             ))}

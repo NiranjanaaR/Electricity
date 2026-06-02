@@ -66,17 +66,16 @@ export default function HomePage() {
       />
 
       <div className="flex-1 min-w-0">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-          <SearchBar value={query} onChange={setQuery} />
-          <div className="flex-1">
-            <Filters action={action} setAction={setAction} risk={risk} setRisk={setRisk} />
+        {/* Toolbar — search and filters in one card */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 mb-4 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-5">
+            <div className="lg:w-72">
+              <SearchBar value={query} onChange={setQuery} />
+            </div>
+            <div className="flex-1 lg:border-l lg:border-slate-100 lg:pl-5">
+              <Filters action={action} setAction={setAction} risk={risk} setRisk={setRisk} />
+            </div>
           </div>
-        </div>
-
-        <div className="mb-4 bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded-md px-3 py-2">
-          <strong>Real market data.</strong> Signals from RSI, moving averages,
-          volume, liquidity and earnings proximity on live daily OHLCV. Not
-          investment advice. No automatic trading.
         </div>
 
         {error && (
@@ -101,16 +100,33 @@ export default function HomePage() {
           </details>
         )}
 
-        <div className="flex items-baseline justify-between mb-2">
-          <h2 className="text-sm uppercase tracking-wide text-slate-500">
-            {sector ? `${sector} · ` : ""}
-            {filtered.length} of {suggestions.length} suggestions
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-700">
+            {sector ? `${sector}` : "All suggestions"}
+            <span className="ml-2 text-xs font-normal text-slate-500">
+              {filtered.length} of {suggestions.length}
+            </span>
           </h2>
+          {(query || sector || action || risk) && (
+            <button
+              onClick={() => {
+                setQuery("");
+                setSector("");
+                setAction("");
+                setRisk("");
+              }}
+              className="text-xs text-slate-500 hover:text-rose-600"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
 
         {loading && <div className="text-sm text-slate-500">Loading…</div>}
         {!loading && filtered.length === 0 && (
-          <div className="text-sm text-slate-500">No suggestions match the current filters.</div>
+          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-sm text-slate-500">
+            No suggestions match the current filters.
+          </div>
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -118,6 +134,12 @@ export default function HomePage() {
             <SuggestionCard key={s.id} s={s} />
           ))}
         </div>
+
+        <p className="text-[11px] text-slate-400 mt-6 leading-relaxed">
+          Signals from RSI, moving averages, volume, liquidity and earnings
+          proximity on live daily OHLCV. Not investment advice. No automatic
+          trading.
+        </p>
       </div>
     </div>
   );
