@@ -6,6 +6,7 @@ import ActionBadge from "./ActionBadge";
 import RiskBadge from "./RiskBadge";
 import ConfidenceBar from "./ConfidenceBar";
 import IndicatorChips from "./IndicatorChips";
+import ContextPanel from "./ContextPanel";
 
 interface Props {
   ticker: string;
@@ -65,6 +66,7 @@ export default function StockDetailPanel({ ticker }: Props) {
           <p className="text-sm text-slate-700 mt-3 leading-relaxed">
             {suggestion.explanation}
           </p>
+          <ContextPanel s={suggestion} />
         </div>
       )}
 

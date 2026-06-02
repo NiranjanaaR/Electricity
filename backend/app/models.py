@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, date
 from sqlalchemy import (
     Column, Integer, String, Float, Date, DateTime, ForeignKey, UniqueConstraint, Text
@@ -52,7 +53,35 @@ class Suggestion(Base):
     sma_50 = Column(Float, nullable=True)
     volume_spike = Column(Float, nullable=True)
     last_close = Column(Float, nullable=True)
+    avg_turnover_nok = Column(Float, nullable=True)   # 20-day mean of close*volume
+    next_earnings_date = Column(Date, nullable=True)
+    days_to_earnings = Column(Integer, nullable=True)
+    enrichment_json = Column(Text, nullable=True)     # bid/ask/spread + news
     explanation = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     stock = relationship("Stock", back_populates="suggestions")
+
+    def _enrichment(self) -> dict:
+        if not self.enrichment_json:
+            return {}
+        try:
+            return json.loads(self.enrichment_json)
+        except Exception:
+            return {}
+
+    @property
+    def bid(self):
+        return self._enrichment().get("bid")
+
+    @property
+    def ask(self):
+        return self._enrichment().get("ask")
+
+    @property
+    def spread_pct(self):
+        return self._enrichment().get("spread_pct")
+
+    @property
+    def news(self):
+        return self._enrichment().get("news") or []

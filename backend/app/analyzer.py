@@ -15,9 +15,11 @@ import logging
 
 from sqlalchemy.orm import Session
 
+import json
+
 from . import indicators
 from .models import Stock, PriceBar, Suggestion
-from .data_provider import fetch_prices, DataFetchError
+from .data_provider import fetch_prices, fetch_enrichment, DataFetchError
 from .seed_data import universe
 
 logger = logging.getLogger(__name__)
@@ -67,7 +69,9 @@ def refresh_prices(db: Session, stock: Stock, lookback_days: int) -> List[PriceB
 
 def score(rsi: float | None, vol_spike: float | None,
           sma20: float | None, sma50: float | None,
-          last_close: float | None, mom_pct: float | None) -> tuple[str, float, str]:
+          last_close: float | None, mom_pct: float | None,
+          avg_turnover_nok: float | None = None,
+          days_to_earnings: int | None = None) -> tuple[str, float, str]:
     """Return (action, confidence 0..1, reason string)."""
     reasons: list[str] = []
     points = 0.0
@@ -115,6 +119,31 @@ def score(rsi: float | None, vol_spike: float | None,
         elif vol_spike > 1.3:
             reasons.append(f"Volume {vol_spike:.1f}× average — slight pickup")
 
+    # Liquidity penalty — thin turnover increases slippage and makes the
+    # technical signal less actionable, regardless of how clean it looks.
+    if avg_turnover_nok is not None:
+        if avg_turnover_nok < 2_000_000:
+            points -= 0.20
+            reasons.append(
+                f"Thin liquidity (~{avg_turnover_nok/1e6:.1f}M NOK/day avg) — "
+                "wide spreads likely"
+            )
+        elif avg_turnover_nok < 10_000_000:
+            points -= 0.05
+            reasons.append(
+                f"Modest liquidity (~{avg_turnover_nok/1e6:.1f}M NOK/day avg)"
+            )
+
+    # Earnings proximity — technicals get overridden by results, so trim
+    # confidence when earnings are imminent.
+    if days_to_earnings is not None and days_to_earnings >= 0:
+        if days_to_earnings <= 7:
+            points -= 0.15
+            reasons.append(f"Earnings in {days_to_earnings} day(s) — event risk")
+        elif days_to_earnings <= 14:
+            points -= 0.07
+            reasons.append(f"Earnings in {days_to_earnings} days — heads up")
+
     confidence = max(0.0, min(1.0, 0.5 + points))
     if confidence >= 0.65:
         action = "BUY"
@@ -154,7 +183,40 @@ def analyze_stock(db: Session, stock: Stock, lookback_days: int,
     vol_pct = indicators.volatility_pct(closes, 20)
     last_close = closes[-1]
 
-    action, confidence, explanation = score(rsi_v, vol_spike, sma20, sma50, last_close, mom)
+    # 20-day average daily turnover in NOK (close * volume), useful as a
+    # liquidity gate independent of share-volume noise.
+    last_n = min(20, len(prices))
+    avg_turnover_nok = float(
+        sum(p.close * p.volume for p in prices[-last_n:]) / last_n
+    ) if last_n else None
+
+    # Best-effort context fetch — never blocks the suggestion.
+    enrichment = fetch_enrichment(stock.ticker)
+    next_earnings = enrichment.get("next_earnings")
+    days_to_earnings: int | None = None
+    if next_earnings is not None:
+        days_to_earnings = (next_earnings - analysis_date).days
+
+    bid = enrichment.get("bid")
+    ask = enrichment.get("ask")
+    spread_pct: float | None = None
+    if bid and ask and ask > 0:
+        spread_pct = (ask - bid) / ask * 100.0
+
+    enrichment_payload = {
+        "bid": bid,
+        "ask": ask,
+        "spread_pct": spread_pct,
+        "avg_volume_10d": enrichment.get("avg_volume_10d"),
+        "avg_volume_3m": enrichment.get("avg_volume_3m"),
+        "news": enrichment.get("news") or [],
+    }
+
+    action, confidence, explanation = score(
+        rsi_v, vol_spike, sma20, sma50, last_close, mom,
+        avg_turnover_nok=avg_turnover_nok,
+        days_to_earnings=days_to_earnings,
+    )
     risk = risk_from_volatility(vol_pct)
 
     db.query(Suggestion).filter(
@@ -173,6 +235,10 @@ def analyze_stock(db: Session, stock: Stock, lookback_days: int,
         sma_50=sma50,
         volume_spike=vol_spike,
         last_close=last_close,
+        avg_turnover_nok=avg_turnover_nok,
+        next_earnings_date=next_earnings,
+        days_to_earnings=days_to_earnings,
+        enrichment_json=json.dumps(enrichment_payload, default=str),
         explanation=explanation,
     )
     db.add(suggestion)

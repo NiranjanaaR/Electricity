@@ -1,6 +1,7 @@
 from datetime import date, datetime
-from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from typing import Optional, List, Any
+import json
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class StockBase(BaseModel):
@@ -27,6 +28,13 @@ class PriceBarOut(BaseModel):
     volume: float
 
 
+class NewsItem(BaseModel):
+    title: Optional[str] = None
+    publisher: Optional[str] = None
+    link: Optional[str] = None
+    published: Optional[str] = None
+
+
 class SuggestionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -39,8 +47,20 @@ class SuggestionOut(BaseModel):
     sma_50: Optional[float]
     volume_spike: Optional[float]
     last_close: Optional[float]
+    avg_turnover_nok: Optional[float] = None
+    next_earnings_date: Optional[date] = None
+    days_to_earnings: Optional[int] = None
+    bid: Optional[float] = None
+    ask: Optional[float] = None
+    spread_pct: Optional[float] = None
+    news: List[NewsItem] = []
     explanation: str
     stock: StockOut
+
+    @field_validator("news", mode="before")
+    @classmethod
+    def _passthrough_news(cls, v: Any):
+        return v or []
 
 
 class StockDetail(BaseModel):

@@ -245,6 +245,89 @@ _PROVIDERS: list[tuple[str, Callable[[str, int], List[Dict]]]] = [
 ]
 
 
+# --------------------------- enrichment -----------------------------------
+# Best-effort context fetchers. Failures are swallowed by ``fetch_enrichment``
+# so a missing news feed never blocks the main price analysis.
+
+def _yahoo_quote_summary(ticker: str) -> Dict:
+    url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
+    params = {"modules": "price,summaryDetail,calendarEvents"}
+    with httpx.Client(timeout=20.0, headers=_BROWSER_HEADERS,
+                      follow_redirects=True) as client:
+        resp = client.get(url, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+    result = (data.get("quoteSummary") or {}).get("result") or []
+    if not result:
+        return {}
+    res = result[0]
+    price = res.get("price") or {}
+    summary = res.get("summaryDetail") or {}
+    cal = res.get("calendarEvents") or {}
+    earnings = cal.get("earnings") or {}
+    earnings_dates = earnings.get("earningsDate") or []
+
+    def _raw(field):
+        return (field or {}).get("raw") if isinstance(field, dict) else None
+
+    next_earnings: date | None = None
+    if earnings_dates:
+        ts = _raw(earnings_dates[0])
+        if ts:
+            next_earnings = datetime.utcfromtimestamp(ts).date()
+
+    return {
+        "bid": _raw(price.get("bid")),
+        "ask": _raw(price.get("ask")),
+        "avg_volume_10d": _raw(summary.get("averageVolume10days")),
+        "avg_volume_3m": _raw(summary.get("averageVolume")),
+        "next_earnings": next_earnings,
+    }
+
+
+def _yahoo_news(ticker: str, limit: int = 5) -> List[Dict]:
+    url = "https://query1.finance.yahoo.com/v1/finance/search"
+    params = {"q": ticker, "newsCount": limit, "quotesCount": 0,
+              "enableFuzzyQuery": "false"}
+    with httpx.Client(timeout=20.0, headers=_BROWSER_HEADERS,
+                      follow_redirects=True) as client:
+        resp = client.get(url, params=params)
+    resp.raise_for_status()
+    data = resp.json()
+    news = data.get("news") or []
+    out: List[Dict] = []
+    for n in news[:limit]:
+        ts = n.get("providerPublishTime")
+        out.append({
+            "title": n.get("title"),
+            "publisher": n.get("publisher"),
+            "link": n.get("link"),
+            "published": datetime.utcfromtimestamp(ts).isoformat() if ts else None,
+        })
+    return out
+
+
+def fetch_enrichment(ticker: str) -> Dict:
+    """Pull bid/ask, average volume, next earnings date, and recent news.
+
+    Best-effort: any failure is logged and an empty value substituted, so
+    a degraded enrichment never blocks the price analysis.
+    """
+    meta: Dict = {}
+    try:
+        meta = _yahoo_quote_summary(ticker)
+    except Exception as e:
+        logger.info("Enrichment metadata unavailable for %s: %s", ticker, e)
+
+    try:
+        news = _yahoo_news(ticker)
+    except Exception as e:
+        logger.info("Enrichment news unavailable for %s: %s", ticker, e)
+        news = []
+    meta["news"] = news
+    return meta
+
+
 def fetch_prices(ticker: str, days: int = 180) -> List[Dict]:
     """Fetch daily OHLCV bars for ``ticker``.
 

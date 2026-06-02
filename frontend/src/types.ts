@@ -22,6 +22,13 @@ export interface PriceBar {
   volume: number;
 }
 
+export interface NewsItem {
+  title: string | null;
+  publisher: string | null;
+  link: string | null;
+  published: string | null;
+}
+
 export interface Suggestion {
   id: number;
   analysis_date: string;
@@ -33,6 +40,13 @@ export interface Suggestion {
   sma_50: number | null;
   volume_spike: number | null;
   last_close: number | null;
+  avg_turnover_nok?: number | null;
+  next_earnings_date?: string | null;
+  days_to_earnings?: number | null;
+  bid?: number | null;
+  ask?: number | null;
+  spread_pct?: number | null;
+  news?: NewsItem[];
   explanation: string;
   stock: Stock;
 }
