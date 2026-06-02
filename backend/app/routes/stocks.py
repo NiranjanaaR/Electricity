@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Stock, PriceBar, Suggestion
-from ..schemas import StockOut, StockDetail, PriceBarOut, SuggestionOut
+from ..schemas import StockOut, StockDetail, PriceBarOut, SuggestionOut, FinancialsOut
+from ..data_provider import fetch_financials
 
 router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 
@@ -54,3 +55,15 @@ def get_stock(
         prices=[PriceBarOut.model_validate(p) for p in prices],
         suggestion=SuggestionOut.model_validate(suggestion) if suggestion else None,
     )
+
+
+@router.get("/{ticker}/financials", response_model=FinancialsOut)
+def get_financials(ticker: str, db: Session = Depends(get_db)):
+    stock = db.query(Stock).filter(Stock.ticker == ticker.upper()).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail=f"Unknown ticker {ticker}")
+    payload = fetch_financials(stock.ticker)
+    if not payload:
+        # Empty is a valid response (Yahoo had no financials for this ticker).
+        return FinancialsOut()
+    return FinancialsOut(**payload)

@@ -19,7 +19,7 @@ import json
 import time
 
 from . import indicators
-from .models import Stock, PriceBar, Suggestion
+from .models import Stock, PriceBar, Suggestion, Alert
 from .data_provider import fetch_prices, fetch_enrichment, DataFetchError
 from .seed_data import universe
 
@@ -220,6 +220,16 @@ def analyze_stock(db: Session, stock: Stock, lookback_days: int,
     )
     risk = risk_from_volatility(vol_pct)
 
+    # Look up the previous suggestion (any earlier date) so we can emit an
+    # Alert when the action flips.
+    previous = (
+        db.query(Suggestion)
+        .filter(Suggestion.stock_id == stock.id,
+                Suggestion.analysis_date < analysis_date)
+        .order_by(Suggestion.analysis_date.desc())
+        .first()
+    )
+
     db.query(Suggestion).filter(
         Suggestion.stock_id == stock.id,
         Suggestion.analysis_date == analysis_date,
@@ -245,6 +255,19 @@ def analyze_stock(db: Session, stock: Stock, lookback_days: int,
     db.add(suggestion)
     db.commit()
     db.refresh(suggestion)
+
+    if previous is not None and previous.action != action:
+        db.add(Alert(
+            stock_id=stock.id,
+            analysis_date=analysis_date,
+            prev_action=previous.action,
+            new_action=action,
+            prev_confidence=previous.confidence,
+            new_confidence=confidence,
+            note=explanation[:280],
+        ))
+        db.commit()
+
     return suggestion
 
 

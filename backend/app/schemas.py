@@ -74,6 +74,50 @@ class FetchError(BaseModel):
     error: str
 
 
+class AlertOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    analysis_date: date
+    prev_action: Optional[str] = None
+    new_action: str
+    prev_confidence: Optional[float] = None
+    new_confidence: float
+    note: Optional[str] = None
+    created_at: datetime
+    stock: StockOut
+
+
+class EarningsPoint(BaseModel):
+    date: Optional[str] = None
+    revenue: Optional[float] = None
+    earnings: Optional[float] = None
+
+
+class EarningsHistoryPoint(BaseModel):
+    quarter: Optional[str] = None
+    period: Optional[str] = None
+    estimate: Optional[float] = None
+    actual: Optional[float] = None
+    surprise_pct: Optional[float] = None
+
+
+class FinancialsOut(BaseModel):
+    currency: str = "NOK"
+    quarterly_earnings: List[EarningsPoint] = []
+    annual_earnings: List[EarningsPoint] = []
+    earnings_history: List[EarningsHistoryPoint] = []
+
+
+class AiAskRequest(BaseModel):
+    ticker: str
+    question: str
+
+
+class AiAskResponse(BaseModel):
+    answer: str
+    model: str
+
+
 class AnalysisRunResult(BaseModel):
     analyzed: int
     suggestions: int

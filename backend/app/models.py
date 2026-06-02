@@ -85,3 +85,22 @@ class Suggestion(Base):
     @property
     def news(self):
         return self._enrichment().get("news") or []
+
+
+class Alert(Base):
+    """Emitted whenever a stock's daily action changes (e.g. WATCH→BUY)."""
+
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"),
+                      index=True, nullable=False)
+    analysis_date = Column(Date, nullable=False, index=True)
+    prev_action = Column(String(16), nullable=True)
+    new_action = Column(String(16), nullable=False)
+    prev_confidence = Column(Float, nullable=True)
+    new_confidence = Column(Float, nullable=False)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    stock = relationship("Stock")

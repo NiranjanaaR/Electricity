@@ -1,4 +1,6 @@
-import type { Suggestion, StockDetail, Stock, FetchError } from "./types";
+import type {
+  Suggestion, StockDetail, Stock, FetchError, Alert, Financials,
+} from "./types";
 
 const BASE = "";
 
@@ -34,4 +36,20 @@ export const api = {
       analysis_date: string;
       errors: FetchError[];
     }>("/api/analysis/run", { method: "POST" }),
+  financials: (ticker: string) =>
+    jsonFetch<Financials>(`/api/stocks/${encodeURIComponent(ticker)}/financials`),
+  alerts: (params: { days?: number; tickers?: string[] } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.days) qs.set("days", String(params.days));
+    if (params.tickers && params.tickers.length)
+      qs.set("tickers", params.tickers.join(","));
+    const q = qs.toString();
+    return jsonFetch<Alert[]>(`/api/alerts${q ? `?${q}` : ""}`);
+  },
+  ask: (ticker: string, question: string) =>
+    jsonFetch<{ answer: string; model: string }>("/api/ai/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker, question }),
+    }),
 };

@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     schedule_minute: int = 0
     timezone: str = "Europe/Oslo"
     allow_origins: str = "http://localhost:5173,http://localhost:3000"
+    deepseek_api_key: str | None = None
+    deepseek_model: str = "deepseek-chat"
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
 
     @property
     def origins(self) -> list[str]:

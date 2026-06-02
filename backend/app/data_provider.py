@@ -378,6 +378,66 @@ def _yfinance_news(ticker: str, limit: int = 5) -> List[Dict]:
     return out
 
 
+def fetch_financials(ticker: str) -> Dict:
+    """Quarterly and annual revenue/earnings via Yahoo quoteSummary.
+
+    Returns a dict with ``quarterly_earnings``, ``annual_earnings`` and
+    ``earnings_history`` (estimates vs actuals). Empty dict on failure.
+    """
+    url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
+    params = {"modules": "earnings,earningsHistory,price"}
+    try:
+        with httpx.Client(timeout=20.0, headers=_BROWSER_HEADERS,
+                          follow_redirects=True) as client:
+            resp = client.get(url, params=params)
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as e:
+        logger.info("Financials fetch failed for %s: %s", ticker, e)
+        return {}
+
+    result = (payload.get("quoteSummary") or {}).get("result") or []
+    if not result:
+        return {}
+    res = result[0]
+    currency = (res.get("price") or {}).get("currency") or "NOK"
+    earnings = res.get("earnings") or {}
+    fin = earnings.get("financialsChart") or {}
+    earn_hist = (res.get("earningsHistory") or {}).get("history") or []
+
+    def _raw(v):
+        if isinstance(v, dict):
+            return v.get("raw")
+        return v
+
+    def _series(items):
+        out = []
+        for it in items or []:
+            out.append({
+                "date": str(it.get("date")) if it.get("date") is not None else None,
+                "revenue": _raw(it.get("revenue")),
+                "earnings": _raw(it.get("earnings")),
+            })
+        return out
+
+    history = []
+    for h in earn_hist:
+        history.append({
+            "quarter": str(h.get("quarter")) if h.get("quarter") is not None else None,
+            "period": h.get("period"),
+            "estimate": _raw(h.get("epsEstimate")),
+            "actual": _raw(h.get("epsActual")),
+            "surprise_pct": _raw(h.get("surprisePercent")),
+        })
+
+    return {
+        "currency": currency,
+        "quarterly_earnings": _series(fin.get("quarterly")),
+        "annual_earnings": _series(fin.get("yearly")),
+        "earnings_history": history,
+    }
+
+
 def fetch_enrichment(ticker: str) -> Dict:
     """Pull bid/ask, average volume, next earnings date, and recent news.
 

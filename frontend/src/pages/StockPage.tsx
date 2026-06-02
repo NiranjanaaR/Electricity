@@ -7,6 +7,8 @@ import ConfidenceBar from "../components/ConfidenceBar";
 import IndicatorChips from "../components/IndicatorChips";
 import ContextPanel from "../components/ContextPanel";
 import WatchButton from "../components/WatchButton";
+import FinancialsPanel from "../components/FinancialsPanel";
+import AiChat from "../components/AiChat";
 import { api } from "../api";
 import type { StockDetail } from "../types";
 
@@ -108,6 +110,17 @@ export default function StockPage() {
             Last fetch error: {stock.last_error}
           </p>
         )}
+      </div>
+
+      <div className="mt-5 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900 mb-3">
+          Financials
+        </h2>
+        <FinancialsPanel ticker={stock.ticker} />
+      </div>
+
+      <div className="mt-5">
+        <AiChat ticker={stock.ticker} />
       </div>
     </div>
   );

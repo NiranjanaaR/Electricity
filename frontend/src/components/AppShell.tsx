@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { api } from "../api";
 import { useWatchlist } from "../hooks/useWatchlist";
+import AlertsBell from "./AlertsBell";
 
 const nav = [
   { to: "/", label: "Suggestions", end: true },
@@ -51,6 +52,7 @@ export default function AppShell() {
                 Last: {analysisDate}
               </span>
             )}
+            <AlertsBell />
             <button
               onClick={runAnalysis}
               disabled={running}

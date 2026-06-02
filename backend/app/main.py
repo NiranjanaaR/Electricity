@@ -9,10 +9,12 @@ from sqlalchemy import inspect, text
 from .config import get_settings
 from .db import engine, SessionLocal, Base
 from .analyzer import ensure_universe, run_daily_analysis
-from .models import Suggestion, Stock  # noqa: F401  (register models)
+from .models import Suggestion, Stock, Alert  # noqa: F401  (register models)
 from .routes import stocks as stocks_routes
 from .routes import suggestions as suggestions_routes
 from .routes import analysis as analysis_routes
+from .routes import alerts as alerts_routes
+from .routes import ai as ai_routes
 from .scheduler import start_scheduler
 
 logging.basicConfig(level=logging.INFO,
@@ -106,6 +108,8 @@ app.add_middleware(
 app.include_router(stocks_routes.router)
 app.include_router(suggestions_routes.router)
 app.include_router(analysis_routes.router)
+app.include_router(alerts_routes.router)
+app.include_router(ai_routes.router)
 
 
 @app.get("/api/health")

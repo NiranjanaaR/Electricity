@@ -56,3 +56,36 @@ export interface StockDetail {
   prices: PriceBar[];
   suggestion: Suggestion | null;
 }
+
+export interface Alert {
+  id: number;
+  analysis_date: string;
+  prev_action: string | null;
+  new_action: string;
+  prev_confidence: number | null;
+  new_confidence: number;
+  note: string | null;
+  created_at: string;
+  stock: Stock;
+}
+
+export interface EarningsPoint {
+  date: string | null;
+  revenue: number | null;
+  earnings: number | null;
+}
+
+export interface EarningsHistoryPoint {
+  quarter: string | null;
+  period: string | null;
+  estimate: number | null;
+  actual: number | null;
+  surprise_pct: number | null;
+}
+
+export interface Financials {
+  currency: string;
+  quarterly_earnings: EarningsPoint[];
+  annual_earnings: EarningsPoint[];
+  earnings_history: EarningsHistoryPoint[];
+}
