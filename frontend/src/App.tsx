@@ -76,8 +76,9 @@ export default function App() {
         <div className="mb-6 bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded-md px-3 py-2">
           <strong>Real market data.</strong> Suggestions are generated from
           technical indicators (RSI, moving averages, volume) on live daily
-          OHLCV from Yahoo Finance (with AlphaVantage / Finnhub as optional
-          fallbacks). Not investment advice. The app does <em>not</em> place trades.
+          OHLCV from Yahoo Finance with Stooq as a free fallback — no API
+          keys required. Not investment advice. The app does <em>not</em>
+          place trades.
         </div>
 
         <Filters action={action} setAction={setAction} risk={risk} setRisk={setRisk} />

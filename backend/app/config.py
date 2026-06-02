@@ -11,8 +11,6 @@ class Settings(BaseSettings):
     schedule_minute: int = 0
     timezone: str = "Europe/Oslo"
     allow_origins: str = "http://localhost:5173,http://localhost:3000"
-    alphavantage_api_key: str | None = None
-    finnhub_api_key: str | None = None
 
     @property
     def origins(self) -> list[str]:

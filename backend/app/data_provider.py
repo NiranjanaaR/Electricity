@@ -1,17 +1,13 @@
-"""Fetch OHLCV data for Oslo Børs tickers from real market-data providers.
+"""Fetch OHLCV data for Oslo Børs tickers from free, no-key providers.
 
-Resolution order (each provider only attempted if reachable / configured):
+Resolution order:
 
 1. **Yahoo Finance chart API** — direct HTTPS call to
    ``query1.finance.yahoo.com``. No API key required.
 2. **Stooq** CSV download — open data, no key required. Good fallback when
-   Yahoo rate-limits.
+   Yahoo rate-limits. Tries both ``stooq.com`` and ``stooq.pl`` mirrors.
 3. **yfinance** library — secondary Yahoo path, useful when the library
-   handles a cookie/crumb negotiation that the direct call doesn't.
-4. **AlphaVantage** ``TIME_SERIES_DAILY`` — opt-in via
-   ``ALPHAVANTAGE_API_KEY``. Free tier is rate-limited (5 req/min).
-5. **Finnhub** ``/stock/candle`` — opt-in via ``FINNHUB_API_KEY``. Oslo
-   Børs candles require Finnhub's paid tier.
+   handles a cookie/crumb negotiation the direct call doesn't.
 
 If every provider fails, :class:`DataFetchError` is raised. The analyzer
 records the error against the stock so the API surfaces it to the UI.
@@ -23,17 +19,15 @@ from datetime import date, datetime, timedelta
 from typing import List, Dict, Callable
 import logging
 import math
-import os
 import time
 
 import httpx
 
-from .config import get_settings
-
 logger = logging.getLogger(__name__)
 
 
-# A real-browser User-Agent prevents Yahoo's anti-bot from returning 401/429.
+# A real-browser User-Agent prevents Yahoo's and Stooq's anti-bot from
+# returning 401/429/captcha pages.
 _BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -58,13 +52,7 @@ class DataFetchError(RuntimeError):
 
 
 def _yahoo_chart_fetch(ticker: str, days: int) -> List[Dict]:
-    """Fetch directly from Yahoo's chart endpoint (no library).
-
-    This is the same data ``yfinance`` uses but without the cookie/crumb
-    dance that frequently breaks. The response is a single JSON object
-    containing parallel arrays for timestamp / open / high / low / close /
-    volume.
-    """
+    """Fetch directly from Yahoo's chart endpoint (no library)."""
     end_ts = int(time.time())
     start_ts = end_ts - (max(days, 30) + 14) * 86400
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
@@ -131,51 +119,71 @@ def _yahoo_chart_fetch(ticker: str, days: int) -> List[Dict]:
 def _stooq_fetch(ticker: str, days: int) -> List[Dict]:
     """Fetch from Stooq CSV. Free, no API key.
 
-    Stooq uses lowercase tickers with the same ``.ol`` suffix as Yahoo for
-    Oslo Børs.
+    Tries both stooq.com and stooq.pl mirrors — when one rate-limits a
+    request and returns the "Get your apikey:" gate, the other usually
+    still serves CSV. Stooq uses lowercase tickers with the same ``.ol``
+    suffix as Yahoo for Oslo Børs.
     """
     sym = ticker.lower()
-    url = f"https://stooq.com/q/d/l/?s={sym}&i=d"
-    with httpx.Client(timeout=30.0, follow_redirects=True,
-                      headers={"User-Agent": _BROWSER_HEADERS["User-Agent"]}) as client:
-        resp = client.get(url)
-    resp.raise_for_status()
-    text = resp.text.strip()
-
-    if not text or text.lower().startswith("no data"):
-        raise RuntimeError("Stooq: no data for symbol")
-
-    lines = text.splitlines()
-    if len(lines) < 2 or not lines[0].lower().startswith("date"):
-        raise RuntimeError(f"Stooq: unexpected response head: {lines[0][:80]!r}")
-
-    cutoff = date.today() - timedelta(days=max(days, 30))
-    bars: List[Dict] = []
-    for line in lines[1:]:
-        parts = line.split(",")
-        if len(parts) < 6:
-            continue
+    headers = {
+        "User-Agent": _BROWSER_HEADERS["User-Agent"],
+        "Accept": "text/csv,text/plain,*/*",
+        "Referer": "https://stooq.com/",
+    }
+    last_err: str | None = None
+    for host in ("stooq.com", "stooq.pl"):
+        url = f"https://{host}/q/d/l/?s={sym}&i=d"
         try:
-            d = datetime.strptime(parts[0], "%Y-%m-%d").date()
-        except ValueError:
+            with httpx.Client(timeout=30.0, follow_redirects=True,
+                              headers=headers) as client:
+                resp = client.get(url)
+            resp.raise_for_status()
+        except Exception as e:
+            last_err = f"{host}: {e}"
             continue
-        if d < cutoff:
+
+        text = resp.text.strip()
+        if not text or text.lower().startswith("no data"):
+            last_err = f"{host}: no data for symbol"
             continue
-        try:
-            bars.append({
-                "date": d,
-                "open": float(parts[1]),
-                "high": float(parts[2]),
-                "low": float(parts[3]),
-                "close": float(parts[4]),
-                "volume": float(parts[5]) if parts[5] else 0.0,
-            })
-        except ValueError:
+        if "apikey" in text.lower()[:200]:
+            # Stooq's soft-rate-limit / paid gate page
+            last_err = f"{host}: rate-limited (apikey gate)"
             continue
-    if not bars:
-        raise RuntimeError("Stooq: no bars in window")
-    bars.sort(key=lambda b: b["date"])
-    return bars
+        lines = text.splitlines()
+        if len(lines) < 2 or not lines[0].lower().startswith("date"):
+            last_err = f"{host}: unexpected response head: {lines[0][:60]!r}"
+            continue
+
+        cutoff = date.today() - timedelta(days=max(days, 30))
+        bars: List[Dict] = []
+        for line in lines[1:]:
+            parts = line.split(",")
+            if len(parts) < 6:
+                continue
+            try:
+                d = datetime.strptime(parts[0], "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if d < cutoff:
+                continue
+            try:
+                bars.append({
+                    "date": d,
+                    "open": float(parts[1]),
+                    "high": float(parts[2]),
+                    "low": float(parts[3]),
+                    "close": float(parts[4]),
+                    "volume": float(parts[5]) if parts[5] else 0.0,
+                })
+            except ValueError:
+                continue
+        if bars:
+            bars.sort(key=lambda b: b["date"])
+            return bars
+        last_err = f"{host}: no bars in window"
+
+    raise RuntimeError(f"Stooq: {last_err or 'unknown error'}")
 
 
 def _yfinance_fetch(ticker: str, days: int) -> List[Dict]:
@@ -230,94 +238,10 @@ def _yfinance_fetch(ticker: str, days: int) -> List[Dict]:
     return bars
 
 
-def _alphavantage_fetch(ticker: str, days: int) -> List[Dict]:
-    key = get_settings().alphavantage_api_key or os.environ.get("ALPHAVANTAGE_API_KEY")
-    if not key:
-        raise RuntimeError("ALPHAVANTAGE_API_KEY not set")
-
-    outputsize = "full" if days > 100 else "compact"
-    params = {
-        "function": "TIME_SERIES_DAILY",
-        "symbol": ticker,
-        "outputsize": outputsize,
-        "apikey": key,
-    }
-    with httpx.Client(timeout=30.0) as client:
-        resp = client.get("https://www.alphavantage.co/query", params=params)
-    resp.raise_for_status()
-    payload = resp.json()
-
-    if "Time Series (Daily)" not in payload:
-        msg = payload.get("Note") or payload.get("Error Message") or "unknown error"
-        raise RuntimeError(f"AlphaVantage: {msg}")
-
-    series = payload["Time Series (Daily)"]
-    cutoff = date.today() - timedelta(days=days)
-    bars: List[Dict] = []
-    for ds, row in series.items():
-        d = datetime.strptime(ds, "%Y-%m-%d").date()
-        if d < cutoff:
-            continue
-        bars.append({
-            "date": d,
-            "open": float(row["1. open"]),
-            "high": float(row["2. high"]),
-            "low": float(row["3. low"]),
-            "close": float(row["4. close"]),
-            "volume": float(row["5. volume"]),
-        })
-    if not bars:
-        raise RuntimeError("AlphaVantage returned no rows in window")
-    bars.sort(key=lambda b: b["date"])
-    return bars
-
-
-def _finnhub_fetch(ticker: str, days: int) -> List[Dict]:
-    key = get_settings().finnhub_api_key or os.environ.get("FINNHUB_API_KEY")
-    if not key:
-        raise RuntimeError("FINNHUB_API_KEY not set")
-
-    to_ts = int(time.time())
-    from_ts = to_ts - days * 24 * 3600
-    params = {
-        "symbol": ticker,
-        "resolution": "D",
-        "from": from_ts,
-        "to": to_ts,
-        "token": key,
-    }
-    with httpx.Client(timeout=30.0) as client:
-        resp = client.get("https://finnhub.io/api/v1/stock/candle", params=params)
-    resp.raise_for_status()
-    payload = resp.json()
-
-    if payload.get("s") != "ok":
-        raise RuntimeError(f"Finnhub: status={payload.get('s')}")
-    ts = payload.get("t", [])
-    if not ts:
-        raise RuntimeError("Finnhub returned no candles")
-
-    bars: List[Dict] = []
-    for i, t in enumerate(ts):
-        bars.append({
-            "date": datetime.utcfromtimestamp(t).date(),
-            "open": float(payload["o"][i]),
-            "high": float(payload["h"][i]),
-            "low": float(payload["l"][i]),
-            "close": float(payload["c"][i]),
-            "volume": float(payload["v"][i]),
-        })
-    bars.sort(key=lambda b: b["date"])
-    return bars
-
-
-# Provider order: keyless / direct first, library second, paid APIs last.
 _PROVIDERS: list[tuple[str, Callable[[str, int], List[Dict]]]] = [
     ("yahoo", _yahoo_chart_fetch),
     ("stooq", _stooq_fetch),
     ("yfinance", _yfinance_fetch),
-    ("alphavantage", _alphavantage_fetch),
-    ("finnhub", _finnhub_fetch),
 ]
 
 

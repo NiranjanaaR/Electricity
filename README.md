@@ -17,15 +17,16 @@ explanation.
 
 ## Data sources
 
-Real market data only — no synthetic fallback. Providers are tried in this
-order; the first one that returns valid bars wins. A failure on every
-provider is recorded against the stock and surfaced in the UI / API.
+Real market data only — no synthetic fallback, no API keys. Providers
+are tried in this order; the first one that returns valid bars wins. A
+failure on every provider is recorded against the stock and surfaced in
+the UI / API.
 
 | Order | Provider | Auth | Coverage |
 | --- | --- | --- | --- |
-| 1 | **Yahoo Finance** (`yfinance`) | none | Full Oslo Børs via `.OL` suffix |
-| 2 | **AlphaVantage** `TIME_SERIES_DAILY` | `ALPHAVANTAGE_API_KEY` | International incl. Oslo (rate-limited free tier) |
-| 3 | **Finnhub** `/stock/candle` | `FINNHUB_API_KEY` | International incl. Oslo (paid tier for OB candles) |
+| 1 | **Yahoo Finance chart API** (direct HTTPS) | none | Full Oslo Børs via `.OL` suffix |
+| 2 | **Stooq** CSV (stooq.com + stooq.pl mirror) | none | Most Oslo Børs tickers |
+| 3 | **yfinance** library | none | Yahoo via cookie/crumb auth — used when the direct call is rate-limited |
 
 ## Stock universe
 
@@ -71,8 +72,8 @@ cp .env.example .env   # edit DATABASE_URL etc.
 uvicorn app.main:app --reload
 ```
 
-If `yfinance` is blocked in your environment, configure one of the API-key
-providers in `.env` (`ALPHAVANTAGE_API_KEY` or `FINNHUB_API_KEY`).
+If Yahoo's API is rate-limiting your IP, the app automatically falls
+back to Stooq's free CSV feed — no key needed.
 
 ## How analysis works
 
@@ -115,6 +116,4 @@ SCHEDULE_HOUR=7
 SCHEDULE_MINUTE=0
 TIMEZONE=Europe/Oslo
 ALLOW_ORIGINS=http://localhost:5173,http://localhost:3000
-ALPHAVANTAGE_API_KEY=
-FINNHUB_API_KEY=
 ```
