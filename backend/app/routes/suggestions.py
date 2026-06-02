@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
 @router.get("", response_model=List[SuggestionOut])
 def latest_suggestions(
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=500),
     action: Optional[str] = Query(None, description="Filter by BUY / WATCH / AVOID"),
     risk: Optional[str] = Query(None, description="Filter by Low / Medium / High"),
     db: Session = Depends(get_db),
