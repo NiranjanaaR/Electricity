@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from .config import get_settings
 from .db import engine, SessionLocal, Base
 from .analyzer import ensure_universe, run_daily_analysis
-from .models import Suggestion  # noqa: F401  (register models)
+from .models import Suggestion, Stock  # noqa: F401  (register models)
 from .routes import stocks as stocks_routes
 from .routes import suggestions as suggestions_routes
 from .routes import analysis as analysis_routes
@@ -17,6 +18,38 @@ from .scheduler import start_scheduler
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
+
+
+# Columns we've added to existing tables over time. SQLAlchemy's
+# ``create_all`` only creates tables, it doesn't ALTER existing ones, so we
+# do a tiny home-grown migration here. Both SQLite and Postgres support the
+# ``ALTER TABLE ... ADD COLUMN`` form used below.
+_MIGRATIONS: dict[str, list[tuple[str, str]]] = {
+    "stocks": [
+        ("last_fetch_at", "TIMESTAMP"),
+        ("last_error", "TEXT"),
+    ],
+    "suggestions": [
+        ("avg_turnover_nok", "FLOAT"),
+        ("next_earnings_date", "DATE"),
+        ("days_to_earnings", "INTEGER"),
+        ("enrichment_json", "TEXT"),
+    ],
+}
+
+
+def _apply_simple_migrations() -> None:
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table, cols in _MIGRATIONS.items():
+            if not inspector.has_table(table):
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            for name, sqltype in cols:
+                if name in existing:
+                    continue
+                logger.info("Migrating: adding %s.%s (%s)", table, name, sqltype)
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sqltype}"))
 
 
 def _initial_analysis():
@@ -34,6 +67,7 @@ def _initial_analysis():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _apply_simple_migrations()
     db = SessionLocal()
     try:
         ensure_universe(db)
