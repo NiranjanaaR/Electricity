@@ -32,7 +32,7 @@ export default function AppShell() {
   return (
     <div className="min-h-full bg-slate-50">
       <header className="bg-gradient-to-r from-nordic-900 via-nordic-700 to-nordic-700 text-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 pt-5 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center font-bold tracking-tight">
               OB
@@ -62,7 +62,7 @@ export default function AppShell() {
             </button>
           </div>
         </div>
-        <nav className="max-w-6xl mx-auto px-4 sm:px-6">
+        <nav className="max-w-screen-2xl mx-auto px-4 sm:px-6">
           <ul className="flex gap-1 text-sm">
             {nav.map((n) => (
               <li key={n.to}>
@@ -97,11 +97,11 @@ export default function AppShell() {
         </nav>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
         <Outlet />
       </main>
 
-      <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-[11px] text-slate-400">
+      <footer className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 text-[11px] text-slate-400">
         OsloBørs AI Assistant · technical analysis on real market data · not
         investment advice · no automatic trading
       </footer>

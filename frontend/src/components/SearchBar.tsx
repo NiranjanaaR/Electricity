@@ -12,11 +12,11 @@ export default function SearchBar({ value, onChange, placeholder }: Props) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? "Search ticker, company, sector…"}
-        className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-nordic-500 focus:border-nordic-500"
+        className="w-full pl-10 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-nordic-500 focus:border-nordic-500"
       />
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400"
+        className="absolute left-3 top-3 h-4 w-4 text-slate-400"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
