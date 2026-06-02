@@ -17,12 +17,14 @@ export default function StockPage() {
   const [detail, setDetail] = useState<StockDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [hasFinancials, setHasFinancials] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setErr(null);
-    api.stockDetail(ticker, 250)
+    api
+      .stockDetail(ticker, 250)
       .then((d) => { if (alive) setDetail(d); })
       .catch((e) => { if (alive) setErr(String(e)); })
       .finally(() => { if (alive) setLoading(false); });
@@ -47,8 +49,8 @@ export default function StockPage() {
   const { stock, prices, suggestion } = detail;
 
   return (
-    <div>
-      <div className="mb-4">
+    <div className="space-y-5">
+      <div>
         <Link to="/" className="text-xs text-slate-500 hover:text-nordic-700">
           ← All suggestions
         </Link>
@@ -112,15 +114,15 @@ export default function StockPage() {
         )}
       </div>
 
-      <div className="mt-5 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900 mb-3">
-          Financials
-        </h2>
-        <FinancialsPanel ticker={stock.ticker} />
-      </div>
+      <AiChat ticker={stock.ticker} />
 
-      <div className="mt-5">
-        <AiChat ticker={stock.ticker} />
+      <div className={hasFinancials ? "bg-white border border-slate-200 rounded-xl p-5 shadow-sm" : ""}>
+        {hasFinancials && (
+          <h2 className="text-base font-semibold text-slate-900 mb-3">
+            Financials
+          </h2>
+        )}
+        <FinancialsPanel ticker={stock.ticker} onLoaded={setHasFinancials} />
       </div>
     </div>
   );

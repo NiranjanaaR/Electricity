@@ -93,34 +93,43 @@ function HistoryTable({ rows }: { rows: EarningsHistoryPoint[] }) {
   );
 }
 
-export default function FinancialsPanel({ ticker }: { ticker: string }) {
+interface Props {
+  ticker: string;
+  onLoaded?: (hasData: boolean) => void;
+}
+
+export default function FinancialsPanel({ ticker, onLoaded }: Props) {
   const [data, setData] = useState<Financials | null>(null);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    setErr(null);
     api
       .financials(ticker)
-      .then((d) => { if (alive) setData(d); })
-      .catch((e) => { if (alive) setErr(String(e)); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+      .then((d) => {
+        if (!alive) return;
+        setData(d);
+        const has =
+          (d.quarterly_earnings?.length ?? 0) > 0 ||
+          (d.annual_earnings?.length ?? 0) > 0 ||
+          (d.earnings_history?.length ?? 0) > 0;
+        onLoaded?.(has);
+      })
+      .catch(() => {
+        if (alive) onLoaded?.(false);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker]);
 
   if (loading) {
-    return (
-      <div className="text-xs text-slate-500">Loading financials…</div>
-    );
-  }
-  if (err) {
-    return (
-      <div className="text-xs text-rose-600">
-        Could not load financials: {err}
-      </div>
-    );
+    return <div className="text-xs text-slate-500">Loading financials…</div>;
   }
 
   const hasAny =
@@ -129,13 +138,7 @@ export default function FinancialsPanel({ ticker }: { ticker: string }) {
       (data.annual_earnings?.length ?? 0) > 0 ||
       (data.earnings_history?.length ?? 0) > 0);
 
-  if (!hasAny) {
-    return (
-      <div className="text-xs text-slate-500">
-        No financials returned by Yahoo for this ticker.
-      </div>
-    );
-  }
+  if (!hasAny) return null;
 
   const cur = data!.currency || "NOK";
 
