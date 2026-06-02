@@ -1,28 +1,27 @@
+import { Link } from "react-router-dom";
 import type { Suggestion } from "../types";
 import ActionBadge from "./ActionBadge";
 import RiskBadge from "./RiskBadge";
 import ConfidenceBar from "./ConfidenceBar";
 import IndicatorChips from "./IndicatorChips";
+import WatchButton from "./WatchButton";
 
 interface Props {
   s: Suggestion;
-  onSelect: (ticker: string) => void;
-  active: boolean;
 }
 
-export default function SuggestionCard({ s, onSelect, active }: Props) {
+export default function SuggestionCard({ s }: Props) {
   return (
-    <button
-      onClick={() => onSelect(s.stock.ticker)}
-      className={`w-full text-left bg-white border rounded-xl p-4 hover:border-nordic-500 transition shadow-sm hover:shadow ${
-        active ? "border-nordic-500 ring-2 ring-nordic-100" : "border-slate-200"
-      }`}
+    <Link
+      to={`/stock/${encodeURIComponent(s.stock.ticker)}`}
+      className="block w-full text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-nordic-500 transition shadow-sm hover:shadow"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
           <div className="flex items-center gap-2">
             <ActionBadge action={s.action} />
             <span className="font-semibold text-slate-900">{s.stock.ticker}</span>
+            <WatchButton ticker={s.stock.ticker} />
           </div>
           <div className="text-xs text-slate-500 mt-0.5">
             {s.stock.name}
@@ -62,6 +61,6 @@ export default function SuggestionCard({ s, onSelect, active }: Props) {
       <p className="text-xs text-slate-600 mt-3 leading-relaxed line-clamp-3">
         {s.explanation}
       </p>
-    </button>
+    </Link>
   );
 }
